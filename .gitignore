@@ -1,23 +1,6 @@
 ```
-# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Dependencies
-venv/
-.venv/
-.env
-.env.local
-*.env.*
-
-# Logs
-*.log
-
-# Testing
-.pytest_cache/
-.coverage
-coverage/
-htmlcov/
 ```
