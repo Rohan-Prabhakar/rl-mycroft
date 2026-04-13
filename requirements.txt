@@ -1,0 +1,28 @@
+# Mycroft-RL Phase 1 Requirements
+# Core dependencies for environment and data pipeline
+
+# Gymnasium (RL environment)
+gymnasium>=0.29.0
+
+# Stable-Baselines3 (SAC implementation)
+stable-baselines3>=2.0.0
+
+# Data handling
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.0
+
+# Visualization (for later phases)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# API (for later phases)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+
+# Testing
+pytest>=7.4.0
+
+# Utilities
+python-dotenv>=1.0.0
