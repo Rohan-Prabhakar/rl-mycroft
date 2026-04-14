@@ -1,6 +1,25 @@
-```
+```gitignore
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Compiled Python files
+*.cpython-312.pyc
+
+# Dependencies
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Logs
+*.log
+
+# Local configuration
+.env
+.env.local
+.env.*
 ```

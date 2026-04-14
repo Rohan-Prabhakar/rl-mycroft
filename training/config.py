@@ -1,24 +1,26 @@
-from pydantic import BaseSettings, Field
+from dataclasses import dataclass, field
 from typing import Optional, List
 import os
 
-class TrainingConfig(BaseSettings):
+
+@dataclass
+class TrainingConfig:
     """Configuration for SAC training hyperparameters and paths."""
     
     # Hyperparameters
-    learning_rate: float = Field(default=3e-4, description="Learning rate for SAC")
-    buffer_size: int = Field(default=100000, description="Replay buffer size")
-    batch_size: int = Field(default=256, description="Batch size for training")
-    entropy_coef: float = Field(default=0.01, description="Entropy coefficient")
-    gamma: float = Field(default=0.99, description="Discount factor")
-    tau: float = Field(default=0.005, description="Target network update rate")
-    total_timesteps: int = Field(default=100000, description="Total training steps")
+    learning_rate: float = field(default=3e-4, metadata={"description": "Learning rate for SAC"})
+    buffer_size: int = field(default=100000, metadata={"description": "Replay buffer size"})
+    batch_size: int = field(default=256, metadata={"description": "Batch size for training"})
+    entropy_coef: float = field(default=0.01, metadata={"description": "Entropy coefficient"})
+    gamma: float = field(default=0.99, metadata={"description": "Discount factor"})
+    tau: float = field(default=0.005, metadata={"description": "Target network update rate"})
+    total_timesteps: int = field(default=100000, metadata={"description": "Total training steps"})
     
     # Environment settings
     start_date: str = "2020-01-01"
     end_date: Optional[str] = None
-    initial_portfolio_value: float = 100000.0
-    transaction_cost: float = 0.001
+    initial_capital: float = 100000.0
+    transaction_cost_rate: float = 0.001
     max_drawdown_limit: float = 0.20
     
     # Paths and Logging
@@ -28,10 +30,7 @@ class TrainingConfig(BaseSettings):
     
     # Device
     device: str = "auto"
-    
-    class Config:
-        env_prefix = "MYCROFT_"
-        case_sensitive = False
+
 
 def get_config(
     ticker_set: Optional[List[str]] = None,
