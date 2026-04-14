@@ -14,8 +14,15 @@ logger = logging.getLogger(__name__)
 class PortfolioEvalCallback(BaseCallback):
     """
     Custom callback to evaluate portfolio performance during training.
-    Logs cumulative return, Sharpe ratio, max drawdown, and policy entropy to TensorBoard.
-    Saves the best model based on Sharpe ratio.
+    
+    Logs cumulative return, Sharpe ratio, max drawdown, and policy entropy
+    to TensorBoard. Saves the best model based on Sharpe ratio.
+    
+    Attributes:
+        eval_freq: Frequency of evaluation in steps.
+        log_dir: Directory for TensorBoard logs.
+        best_model_save_path: Path to save the best model.
+        best_sharpe: Best Sharpe ratio seen so far.
     """
     
     def __init__(
@@ -106,7 +113,7 @@ class PortfolioEvalCallback(BaseCallback):
         if sharpe > self.best_sharpe:
             self.best_sharpe = sharpe
             if self.verbose > 0:
-                logger.info(f"New best model found! Sharpe: {sharpe:.4f}")
+                logger.info("New best model found! Sharpe: %.4f", sharpe)
             self.model.save(os.path.join(self.best_model_save_path, "best_sac_model"))
             
         # Store for logging
@@ -131,6 +138,11 @@ class PortfolioEvalCallback(BaseCallback):
 class SacAgent:
     """
     Wrapper around Stable-Baselines3 SAC agent with portfolio-specific configurations.
+    
+    Attributes:
+        model: The underlying SAC model from stable-baselines3.
+        total_timesteps: Total number of training timesteps.
+        seed: Random seed for reproducibility (if set).
     """
     
     def __init__(
@@ -174,7 +186,7 @@ class SacAgent:
             verbose=1
         )
         
-        logger.info(f"SAC Agent initialized with seed={seed}, device={device}")
+        logger.info("SAC Agent initialized with seed=%s, device=%s", seed, device)
 
     def train(
         self,
@@ -182,7 +194,13 @@ class SacAgent:
         callback: Optional[BaseCallback] = None,
         tb_log_name: str = "SAC_Portfolio"
     ):
-        """Run training."""
+        """Run training.
+        
+        Args:
+            log_dir: Directory for TensorBoard logs.
+            callback: Optional callback for evaluation during training.
+            tb_log_name: Name for the TensorBoard run.
+        """
         os.makedirs(log_dir, exist_ok=True)
         
         if callback is None:
@@ -193,7 +211,7 @@ class SacAgent:
                 verbose=1
             )
         
-        logger.info(f"Starting training for {self.total_timesteps} timesteps...")
+        logger.info("Starting training for %d timesteps...", self.total_timesteps)
         
         self.model.learn(
             total_timesteps=self.total_timesteps,
@@ -206,13 +224,26 @@ class SacAgent:
         logger.info("Training completed.")
 
     def save(self, path: str):
-        """Save the model."""
+        """Save the model.
+        
+        Args:
+            path: File path to save the model.
+        """
         self.model.save(path)
-        logger.info(f"Model saved to {path}")
+        logger.info("Model saved to %s", path)
 
     @classmethod
     def load(cls, path: str, env: gym.Env, device: str = "auto"):
-        """Load a trained model."""
+        """Load a trained model.
+        
+        Args:
+            path: File path to the saved model.
+            env: Environment instance.
+            device: Device to load the model on.
+            
+        Returns:
+            SacAgent instance with loaded model.
+        """
         model = SAC.load(path, env=env, device=device)
         agent = cls.__new__(cls)
         agent.model = model
@@ -221,7 +252,15 @@ class SacAgent:
         return agent
 
     def predict(self, observation: np.ndarray, deterministic: bool = True) -> np.ndarray:
-        """Predict action with NaN/Inf handling."""
+        """Predict action with NaN/Inf handling.
+        
+        Args:
+            observation: Observation array from environment.
+            deterministic: Whether to use deterministic policy.
+            
+        Returns:
+            Action array.
+        """
         if np.any(np.isnan(observation)) or np.any(np.isinf(observation)):
             logger.warning("Observation contains NaN/Inf. Replacing with zeros.")
             observation = np.nan_to_num(observation, nan=0.0, posinf=0.0, neginf=0.0)

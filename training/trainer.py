@@ -13,21 +13,63 @@ from training.config import get_config, TrainingConfig
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train SAC agent for portfolio optimization")
-    parser.add_argument("--env-ticker-set", type=str, nargs='+', default=None, help="Custom list of tickers")
-    parser.add_argument("--timesteps", type=int, default=None, help="Total training timesteps")
-    parser.add_argument("--log-dir", type=str, default=None, help="Directory for TensorBoard logs")
-    parser.add_argument("--model-dir", type=str, default=None, help="Directory to save models")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed")
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode (5k steps)")
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Train SAC agent for portfolio optimization"
+    )
+    parser.add_argument(
+        "--env-ticker-set",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Custom list of tickers"
+    )
+    parser.add_argument(
+        "--data-path",
+        type=str,
+        default=None,
+        help="Path to data file (CSV or pickle). If provided, overrides start/end dates."
+    )
+    parser.add_argument(
+        "--timesteps",
+        type=int,
+        default=None,
+        help="Total training timesteps"
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=str,
+        default=None,
+        help="Directory for TensorBoard logs"
+    )
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help="Directory to save models"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run in debug mode (5k steps)"
+    )
     return parser.parse_args()
 
+
 def main():
+    """Main training entry point."""
     args = parse_args()
     
     # Determine timesteps
@@ -45,16 +87,44 @@ def main():
         seed=args.seed
     )
     
-    logger.info(f"Configuration loaded: Seed={config.seed}, Timesteps={config.total_timesteps}")
-    logger.info(f"Log directory: {config.log_dir}")
-    logger.info(f"Model directory: {config.model_dir}")
+    logger.info(
+        "Configuration loaded: Seed=%d, Timesteps=%d",
+        config.seed,
+        config.total_timesteps
+    )
+    logger.info("Log directory: %s", config.log_dir)
+    logger.info("Model directory: %s", config.model_dir)
+    logger.info("Data path: %s", args.data_path if args.data_path else "Using default date range")
+    
+    # Determine pickle_path if data file is provided
+    pickle_path = None
+    start_date = config.start_date
+    end_date = config.end_date
+    
+    if args.data_path:
+        if not os.path.exists(args.data_path):
+            raise FileNotFoundError(f"Data file not found: {args.data_path}")
+        
+        if args.data_path.endswith('.pkl') or args.data_path.endswith('.pickle'):
+            pickle_path = args.data_path
+            logger.info("Loading data from pickle file: %s", pickle_path)
+            # When using pickle, dates are embedded in the file
+            start_date = None
+            end_date = None
+        elif args.data_path.endswith('.csv'):
+            logger.info("CSV data path provided but not yet supported for direct loading. Use pickle format.")
+            raise ValueError("CSV direct loading not yet implemented. Please convert to pickle first.")
+        else:
+            raise ValueError("Unsupported file format. Use .pkl or .pickle files.")
     
     # Initialize Environment
     env = MycroftFinanceEnv(
-        start_date=config.start_date,
-        end_date=config.end_date,
-        initial_portfolio_value=config.initial_portfolio_value,
-        transaction_cost=config.transaction_cost,
+        tickers=config.ticker_set,
+        start_date=start_date or "2020-01-01",
+        end_date=end_date,
+        pickle_path=pickle_path,
+        initial_capital=config.initial_capital,
+        transaction_cost_rate=config.transaction_cost_rate,
         max_drawdown_limit=config.max_drawdown_limit
     )
     
@@ -94,16 +164,17 @@ def main():
         # Save final model
         final_model_path = os.path.join(config.model_dir, "final_sac_model")
         agent.save(final_model_path)
-        logger.info(f"Final model saved to {final_model_path}")
+        logger.info("Final model saved to %s", final_model_path)
         
     except KeyboardInterrupt:
         logger.info("Training interrupted by user.")
         interrupt_path = os.path.join(config.model_dir, "interrupted_sac_model")
         agent.save(interrupt_path)
-        logger.info(f"Checkpoint saved to {interrupt_path}")
+        logger.info("Checkpoint saved to %s", interrupt_path)
     except Exception as e:
-        logger.error(f"Training failed with error: {e}", exc_info=True)
+        logger.error("Training failed with error: %s", e, exc_info=True)
         raise
+
 
 if __name__ == "__main__":
     main()

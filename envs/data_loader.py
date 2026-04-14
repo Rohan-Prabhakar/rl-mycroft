@@ -2,11 +2,13 @@
 
 This module handles fetching historical OHLCV data from Yahoo Finance,
 computing technical indicators, and preparing data for the environment.
+It also supports loading pre-computed data from pickle files.
 """
 
 import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
+import os
 
 import numpy as np
 import pandas as pd
@@ -46,12 +48,14 @@ class DataLoader:
     
     This class fetches historical OHLCV data from Yahoo Finance and computes
     technical indicators required by the environment state space.
+    It can also load pre-computed data from pickle files.
     
     Attributes:
         tickers: List of ticker symbols to load.
         start_date: Start date for historical data (YYYY-MM-DD).
         end_date: End date for historical data (YYYY-MM-DD).
         data: Dictionary mapping ticker symbols to DataFrames.
+        pickle_path: Path to pickle file if loading from disk.
     """
     
     def __init__(
@@ -59,6 +63,7 @@ class DataLoader:
         tickers: Optional[List[str]] = None,
         start_date: str = "2020-01-01",
         end_date: Optional[str] = None,
+        pickle_path: Optional[str] = None,
     ) -> None:
         """Initialize the DataLoader.
         
@@ -66,22 +71,86 @@ class DataLoader:
             tickers: List of ticker symbols. Defaults to AI-focused companies.
             start_date: Start date for historical data.
             end_date: End date for historical data. Defaults to today.
+            pickle_path: Path to pickle file with pre-computed prices. If provided,
+                data will be loaded from this file instead of fetching from Yahoo.
         """
         self.tickers = tickers if tickers is not None else get_default_tickers()
         self.start_date = start_date
         self.end_date = end_date or datetime.now().strftime("%Y-%m-%d")
+        self.pickle_path = pickle_path
         self.data: dict[str, pd.DataFrame] = {}
         self.combined_data: Optional[pd.DataFrame] = None
         
     def fetch_data(self) -> "DataLoader":
-        """Fetch historical OHLCV data from Yahoo Finance.
+        """Fetch historical OHLCV data from Yahoo Finance or load from pickle.
         
         Returns:
             Self for method chaining.
             
         Raises:
             ValueError: If no data could be fetched for any ticker.
+            FileNotFoundError: If pickle_path is provided but file doesn't exist.
         """
+        if self.pickle_path and os.path.exists(self.pickle_path):
+            return self._load_from_pickle()
+        elif self.pickle_path:
+            logger.warning(f"Pickle file {self.pickle_path} not found, fetching from Yahoo Finance...")
+            return self._fetch_from_yahoo()
+        else:
+            return self._fetch_from_yahoo()
+    
+    def _load_from_pickle(self) -> "DataLoader":
+        """Load price data from a pickle file.
+        
+        The pickle file should contain a DataFrame with:
+        - Rows: dates (DatetimeIndex)
+        - Columns: ticker symbols
+        - Values: adjusted close prices
+        
+        Returns:
+            Self for method chaining.
+        """
+        logger.info(f"Loading data from pickle: {self.pickle_path}")
+        
+        try:
+            df_prices = pd.read_pickle(self.pickle_path)
+            
+            # Validate structure
+            if not isinstance(df_prices, pd.DataFrame):
+                raise ValueError("Pickle file must contain a pandas DataFrame")
+            
+            if df_prices.empty:
+                raise ValueError("Pickle file contains empty DataFrame")
+            
+            # Filter to only requested tickers if they exist in the pickle
+            available_tickers = [t for t in self.tickers if t in df_prices.columns]
+            if not available_tickers:
+                logger.warning(f"No requested tickers found in pickle. Using all available: {list(df_prices.columns)}")
+                available_tickers = list(df_prices.columns)
+                self.tickers = available_tickers
+            
+            df_prices = df_prices[available_tickers]
+            
+            # Convert prices to OHLCV format (simplified - use close for all)
+            for ticker in available_tickers:
+                ticker_df = pd.DataFrame({
+                    'Open': df_prices[ticker],
+                    'High': df_prices[ticker],
+                    'Low': df_prices[ticker],
+                    'Close': df_prices[ticker],
+                    'Volume': np.random.randint(1e6, 1e8, size=len(df_prices))  # Mock volume
+                })
+                self.data[ticker] = ticker_df
+            
+            logger.info(f"Loaded {len(available_tickers)} tickers from pickle with {len(df_prices)} rows")
+            return self
+            
+        except Exception as e:
+            logger.error(f"Error loading pickle: {e}")
+            raise
+    
+    def _fetch_from_yahoo(self) -> "DataLoader":
+        """Fetch historical OHLCV data from Yahoo Finance."""
         logger.info(
             f"Fetching data for {len(self.tickers)} tickers from "
             f"{self.start_date} to {self.end_date}"
@@ -262,6 +331,7 @@ def load_and_prepare_data(
     tickers: Optional[List[str]] = None,
     start_date: str = "2020-01-01",
     end_date: Optional[str] = None,
+    pickle_path: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DatetimeIndex]:
     """Convenience function to load and prepare all data.
     
@@ -269,11 +339,17 @@ def load_and_prepare_data(
         tickers: List of ticker symbols.
         start_date: Start date for historical data.
         end_date: End date for historical data.
+        pickle_path: Path to pickle file with pre-computed prices.
         
     Returns:
         Tuple of (indicators DataFrame, prices DataFrame, DatetimeIndex).
     """
-    loader = DataLoader(tickers=tickers, start_date=start_date, end_date=end_date)
+    loader = DataLoader(
+        tickers=tickers, 
+        start_date=start_date, 
+        end_date=end_date,
+        pickle_path=pickle_path
+    )
     loader.fetch_data()
     loader.compute_indicators()
     

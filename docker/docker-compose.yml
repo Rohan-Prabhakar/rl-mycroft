@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  portfolio-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: portfolio-optimization-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=info
+      - MODEL_PATH=/app/models/sac_portfolio_model.zip
+      - INITIAL_CAPITAL=10000
+      - TRANSACTION_COST_RATE=0.001
+      - RISK_FREE_RATE=0.02
+    volumes:
+      # Mount experiments directory for results and plots
+      - ../experiments:/app/experiments
+      # Mount models directory (create if needed)
+      - ./models:/app/models
+      # Mount logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits (optional, adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# Networks (optional - uses default bridge network)
+networks:
+  default:
+    driver: bridge
