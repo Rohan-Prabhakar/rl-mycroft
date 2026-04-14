@@ -31,6 +31,12 @@ def parse_args():
         help="Custom list of tickers"
     )
     parser.add_argument(
+        "--data-path",
+        type=str,
+        default=None,
+        help="Path to data file (CSV or pickle). If provided, overrides start/end dates."
+    )
+    parser.add_argument(
         "--timesteps",
         type=int,
         default=None,
@@ -88,11 +94,35 @@ def main():
     )
     logger.info("Log directory: %s", config.log_dir)
     logger.info("Model directory: %s", config.model_dir)
+    logger.info("Data path: %s", args.data_path if args.data_path else "Using default date range")
+    
+    # Determine pickle_path if data file is provided
+    pickle_path = None
+    start_date = config.start_date
+    end_date = config.end_date
+    
+    if args.data_path:
+        if not os.path.exists(args.data_path):
+            raise FileNotFoundError(f"Data file not found: {args.data_path}")
+        
+        if args.data_path.endswith('.pkl') or args.data_path.endswith('.pickle'):
+            pickle_path = args.data_path
+            logger.info("Loading data from pickle file: %s", pickle_path)
+            # When using pickle, dates are embedded in the file
+            start_date = None
+            end_date = None
+        elif args.data_path.endswith('.csv'):
+            logger.info("CSV data path provided but not yet supported for direct loading. Use pickle format.")
+            raise ValueError("CSV direct loading not yet implemented. Please convert to pickle first.")
+        else:
+            raise ValueError("Unsupported file format. Use .pkl or .pickle files.")
     
     # Initialize Environment
     env = MycroftFinanceEnv(
-        start_date=config.start_date,
-        end_date=config.end_date,
+        tickers=config.ticker_set,
+        start_date=start_date or "2020-01-01",
+        end_date=end_date,
+        pickle_path=pickle_path,
         initial_capital=config.initial_capital,
         transaction_cost_rate=config.transaction_cost_rate,
         max_drawdown_limit=config.max_drawdown_limit

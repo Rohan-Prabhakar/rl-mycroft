@@ -62,6 +62,7 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
         tickers: Optional[List[str]] = None,
         start_date: str = "2020-01-01",
         end_date: Optional[str] = None,
+        pickle_path: Optional[str] = None,
         initial_capital: float = 1_000_000.0,
         transaction_cost_rate: float = 0.001,
         max_drawdown_limit: float = 0.20,
@@ -75,6 +76,8 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
             tickers: List of ticker symbols. Defaults to AI-focused companies.
             start_date: Start date for historical data.
             end_date: End date for historical data. Defaults to today.
+            pickle_path: Path to pickle file with pre-computed prices. If provided,
+                data will be loaded from this file instead of fetching from Yahoo.
             initial_capital: Starting portfolio value in dollars.
             transaction_cost_rate: Transaction cost as fraction of trade value.
             max_drawdown_limit: Maximum drawdown before episode termination.
@@ -88,6 +91,7 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
         self.n_tickers = len(self.tickers)
         self.start_date = start_date
         self.end_date = end_date
+        self.pickle_path = pickle_path
         self.initial_capital = initial_capital
         self.transaction_cost_rate = transaction_cost_rate
         self.max_drawdown_limit = max_drawdown_limit
@@ -185,11 +189,15 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
             tickers=self.tickers,
             start_date=self.start_date,
             end_date=self.end_date,
+            pickle_path=self.pickle_path,
         )
         
         self.indicators = indicators
         self.prices = prices
         self.dates = dates
+        
+        # Update n_tickers in case it changed from pickle
+        self.n_tickers = len(self.tickers)
         
         logger.info(f"Loaded {len(dates)} time steps for {self.n_tickers} tickers.")
     

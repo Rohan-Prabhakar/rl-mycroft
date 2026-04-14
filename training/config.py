@@ -17,6 +17,7 @@ class TrainingConfig:
     total_timesteps: int = field(default=100000, metadata={"description": "Total training steps"})
     
     # Environment settings
+    ticker_set: Optional[List[str]] = None  # Will use default if None
     start_date: str = "2020-01-01"
     end_date: Optional[str] = None
     initial_capital: float = 100000.0
@@ -42,6 +43,8 @@ def get_config(
     """Factory to create config with CLI overrides."""
     config = TrainingConfig()
     
+    if ticker_set is not None:
+        config.ticker_set = ticker_set
     if timesteps is not None:
         config.total_timesteps = timesteps
     if log_dir is not None:
