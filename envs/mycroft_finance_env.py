@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from gymnasium import spaces
 
-from envs.data_loader import DataLoader, get_default_tickers, load_and_prepare_data
+from envs.sp500_data_loader import SP500DataLoader, load_sp500_data
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
         start_date: str = "2020-01-01",
         end_date: Optional[str] = None,
         pickle_path: Optional[str] = None,
+        sp500_data_dir: Optional[str] = None,
         initial_capital: float = 1_000_000.0,
         transaction_cost_rate: float = 0.001,
         max_drawdown_limit: float = 0.20,
@@ -78,6 +79,8 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
             end_date: End date for historical data. Defaults to today.
             pickle_path: Path to pickle file with pre-computed prices. If provided,
                 data will be loaded from this file instead of fetching from Yahoo.
+            sp500_data_dir: Path to directory containing S&P 500 CSV files from Kaggle.
+                If provided, data will be loaded from these CSV files.
             initial_capital: Starting portfolio value in dollars.
             transaction_cost_rate: Transaction cost as fraction of trade value.
             max_drawdown_limit: Maximum drawdown before episode termination.
@@ -87,11 +90,16 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
         """
         super().__init__()
         
-        self.tickers = tickers if tickers is not None else get_default_tickers()
+        # Default tickers if none provided
+        if tickers is None:
+            self.tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+        else:
+            self.tickers = tickers
         self.n_tickers = len(self.tickers)
         self.start_date = start_date
         self.end_date = end_date
         self.pickle_path = pickle_path
+        self.sp500_data_dir = sp500_data_dir
         self.initial_capital = initial_capital
         self.transaction_cost_rate = transaction_cost_rate
         self.max_drawdown_limit = max_drawdown_limit
@@ -185,18 +193,30 @@ class MycroftFinanceEnv(gym.Env[np.ndarray, np.ndarray]):
         """Load and prepare data for the environment."""
         logger.info("Loading data for environment...")
         
-        indicators, prices, dates = load_and_prepare_data(
-            tickers=self.tickers,
-            start_date=self.start_date,
-            end_date=self.end_date,
-            pickle_path=self.pickle_path,
-        )
+        # Check if using S&P 500 Kaggle dataset
+        if self.sp500_data_dir is not None:
+            logger.info(f"Loading data from S&P 500 dataset: {self.sp500_data_dir}")
+            indicators, prices, dates = load_sp500_data(
+                data_dir=self.sp500_data_dir,
+                tickers=self.tickers,
+                start_date=self.start_date,
+                end_date=self.end_date,
+            )
+        else:
+            # S&P 500 dataset directory is required - no Yahoo Finance fallback
+            raise ValueError(
+                "sp500_data_dir must be provided. "
+                "Please download the S&P 500 dataset from "
+                "https://www.kaggle.com/datasets/andrewmvd/sp-500-stocks "
+                "and set sp500_data_dir to the directory containing "
+                "sp500_stocks.csv, sp500_companies.csv, and sp500_index.csv"
+            )
         
         self.indicators = indicators
         self.prices = prices
         self.dates = dates
         
-        # Update n_tickers in case it changed from pickle
+        # Update n_tickers in case it changed from pickle or dataset
         self.n_tickers = len(self.tickers)
         
         logger.info(f"Loaded {len(dates)} time steps for {self.n_tickers} tickers.")
@@ -574,82 +594,102 @@ if __name__ == "__main__":
     print("Testing MycroftFinanceEnv")
     print("=" * 60)
     
-    # Create environment
-    env = MycroftFinanceEnv(
-        tickers=get_default_tickers()[:5],  # Use fewer tickers for faster test
-        start_date="2023-01-01",
-        end_date="2023-12-31",
-        render_mode=None,
-    )
+    # Default tickers for testing
+    test_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
     
-    # Reset environment
-    obs, info = env.reset(seed=42)
+    # Check if data directory exists
+    import os
+    data_dir = "/workspace/data/sp500_stocks"
     
-    print(f"\nInitial observation shape: {obs.shape}")
-    print(f"Expected shape: {env.observation_space.shape}")
-    assert obs.shape == env.observation_space.shape, "Observation shape mismatch!"
-    
-    print(f"\nAction space: {env.action_space}")
-    print(f"Observation space: {env.observation_space}")
-    
-    print(f"\nInitial info: {info}")
-    
-    # Run 100 random steps
-    print("\n" + "-" * 60)
-    print("Running 100 random steps...")
-    print("-" * 60)
-    
-    rewards = []
-    portfolio_values = []
-    
-    for step in range(100):
-        # Sample random action
-        action = env.action_space.sample()
+    if not os.path.exists(data_dir):
+        print(f"\n⚠ Data directory not found: {data_dir}")
+        print("\nTo run this test:")
+        print("1. Download the S&P 500 dataset from:")
+        print("   https://www.kaggle.com/datasets/andrewmvd/sp-500-stocks")
+        print("2. Extract it to:")
+        print(f"   {data_dir}")
+        print("\nExpected files in the directory:")
+        print("  - sp500_stocks.csv")
+        print("  - sp500_companies.csv")
+        print("  - sp500_index.csv")
+    else:
+        # Create environment with S&P 500 dataset
+        env = MycroftFinanceEnv(
+            tickers=test_tickers,
+            sp500_data_dir=data_dir,
+            start_date="2020-01-01",
+            end_date="2023-12-31",
+            render_mode=None,
+        )
         
-        # Take step
-        obs, reward, terminated, truncated, info = env.step(action)
+        # Reset environment
+        obs, info = env.reset(seed=42)
         
-        rewards.append(reward)
-        portfolio_values.append(info["portfolio_value"])
+        print(f"\nInitial observation shape: {obs.shape}")
+        print(f"Expected shape: {env.observation_space.shape}")
+        assert obs.shape == env.observation_space.shape, "Observation shape mismatch!"
         
-        if step % 20 == 0:
-            print(
-                f"Step {step}: reward={reward:.4f}, "
-                f"portfolio=${info['portfolio_value']:,.2f}, "
-                f"drawdown={info['drawdown']:.2%}"
-            )
+        print(f"\nAction space: {env.action_space}")
+        print(f"Observation space: {env.observation_space}")
         
-        # Check for episode end
-        if terminated or truncated:
-            print(f"\nEpisode ended at step {step}: terminated={terminated}, truncated={truncated}")
-            obs, info = env.reset(seed=42)
-    
-    # Print summary statistics
-    print("\n" + "=" * 60)
-    print("Test Summary")
-    print("=" * 60)
-    
-    print(f"\nObservation shape check: {obs.shape} == {env.observation_space.shape} ✓")
-    print(f"Action shape check: {env.action_space.shape[0]} == {env.n_tickers} ✓")
-    
-    print(f"\nReward statistics:")
-    print(f"  Mean: {np.mean(rewards):.4f}")
-    print(f"  Std:  {np.std(rewards):.4f}")
-    print(f"  Min:  {np.min(rewards):.4f}")
-    print(f"  Max:  {np.max(rewards):.4f}")
-    
-    print(f"\nPortfolio value:")
-    print(f"  Initial: ${env.initial_capital:,.2f}")
-    print(f"  Final:   ${portfolio_values[-1]:,.2f}")
-    print(f"  Change:  {(portfolio_values[-1] - env.initial_capital) / env.initial_capital:.2%}")
-    
-    metrics = env.get_portfolio_metrics()
-    print(f"\nPortfolio metrics:")
-    for key, value in metrics.items():
-        if isinstance(value, float):
-            print(f"  {key}: {value:.4f}")
-    
-    print("\n✓ Environment test completed successfully!")
-    
-    # Close environment
-    env.close()
+        print(f"\nInitial info: {info}")
+        
+        # Run 100 random steps
+        print("\n" + "-" * 60)
+        print("Running 100 random steps...")
+        print("-" * 60)
+        
+        rewards = []
+        portfolio_values = []
+        
+        for step in range(100):
+            # Sample random action
+            action = env.action_space.sample()
+            
+            # Take step
+            obs, reward, terminated, truncated, info = env.step(action)
+            
+            rewards.append(reward)
+            portfolio_values.append(info["portfolio_value"])
+            
+            if step % 20 == 0:
+                print(
+                    f"Step {step}: reward={reward:.4f}, "
+                    f"portfolio=${info['portfolio_value']:,.2f}, "
+                    f"drawdown={info['drawdown']:.2%}"
+                )
+            
+            # Check for episode end
+            if terminated or truncated:
+                print(f"\nEpisode ended at step {step}: terminated={terminated}, truncated={truncated}")
+                obs, info = env.reset(seed=42)
+        
+        # Print summary statistics (only if we ran the test)
+        print("\n" + "=" * 60)
+        print("Test Summary")
+        print("=" * 60)
+        
+        print(f"\nObservation shape check: {obs.shape} == {env.observation_space.shape} ✓")
+        print(f"Action shape check: {env.action_space.shape[0]} == {env.n_tickers} ✓")
+        
+        print(f"\nReward statistics:")
+        print(f"  Mean: {np.mean(rewards):.4f}")
+        print(f"  Std:  {np.std(rewards):.4f}")
+        print(f"  Min:  {np.min(rewards):.4f}")
+        print(f"  Max:  {np.max(rewards):.4f}")
+        
+        print(f"\nPortfolio value:")
+        print(f"  Initial: ${env.initial_capital:,.2f}")
+        print(f"  Final:   ${portfolio_values[-1]:,.2f}")
+        print(f"  Change:  {(portfolio_values[-1] - env.initial_capital) / env.initial_capital:.2%}")
+        
+        metrics = env.get_portfolio_metrics()
+        print(f"\nPortfolio metrics:")
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                print(f"  {key}: {value:.4f}")
+        
+        print("\n✓ Environment test completed successfully!")
+        
+        # Close environment
+        env.close()
