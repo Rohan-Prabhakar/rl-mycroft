@@ -23,8 +23,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add parent directory to path to allow imports when running from within rl_portfolio
+# This fixes "ModuleNotFoundError: No module named 'rl_portfolio'"
+current_dir = Path(__file__).parent.parent  # Go up one level to workspace root
+sys.path.insert(0, str(current_dir))
 
 from rl_portfolio.envs.mycroft_finance_env import MycroftFinanceEnv
 from rl_portfolio.agents.sac_agent import SacAgent
