@@ -197,7 +197,7 @@ class SacAgent:
         """Run training.
         
         Args:
-            log_dir: Directory for TensorBoard logs.
+            log_dir: Directory for TensorBoard logs (used if callback is not provided).
             callback: Optional callback for evaluation during training.
             tb_log_name: Name for the TensorBoard run.
         """
@@ -210,6 +210,8 @@ class SacAgent:
                 best_model_save_path="./models/best",
                 verbose=1
             )
+        else:
+            logger.info("Using provided callback for training evaluation")
         
         logger.info("Starting training for %d timesteps...", self.total_timesteps)
         
